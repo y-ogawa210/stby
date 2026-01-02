@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>文字数・バイト数チェック</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #f3f4f6;
+    padding: 20px;
+    color: #111827;
+  }
+
+  h1 { margin-bottom: 8px; }
+
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    padding: 8px;
+    resize: vertical;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 14px;
+  }
+
+  .info {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 14px;
+  }
+
+  .info-item {
+    background: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    padding: 6px 10px;
+  }
+
+  .label {
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .value {
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+  .progress-wrap {
+    margin-top: 12px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+    height: 12px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #3b82f6;
+    transition: width 0.15s ease-out;
+  }
+
+  .limit-info {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #4b5563;
+  }
+
+  .note {
+    margin-top: 16px;
+    padding: 10px;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>文字数・バイト数チェック</h1>
+
+<textarea id="textInput" placeholder="ここにテキストを入力してください"></textarea>
+
+<div class="info">
+  <div class="info-item">
+    <div class="label">文字数</div>
+    <div class="value" id="charCount">0</div>
+  </div>
+  <div class="info-item">
+    <div class="label">行数</div>
+    <div class="value" id="lineCount">0</div>
+  </div>
+  <div class="info-item">
+    <div class="label">UTF-8</div>
+    <div class="value" id="utf8Count">0</div>
+  </div>
+  <div class="info-item">
+    <div class="label">Shift_JIS（簡易）</div>
+    <div class="value" id="sjisCount">0</div>
+  </div>
+  <div class="info-item">
+    <div class="label">EUC-JP（簡易）</div>
+    <div class="value" id="eucCount">0</div>
+  </div>
+  <div class="info-item">
+    <div class="label">UTF-16</div>
+    <div class="value" id="utf16Count">0</div>
+  </div>
+</div>
+
+<div style="margin-top:12px; font-size:13px;">
+  <label>文字数制限（目安）：
+    <input type="number" id="limitInput" value="100" min="1" style="width:80px; padding:2px 4px;">
+    文字
+  </label>
+</div>
+
+<div class="progress-wrap">
+  <div class="progress-bar" id="progressBar"></div>
+</div>
+<div class="limit-info" id="limitInfo"></div>
+
+<div class="note" id="noteBox"></div>
+
+<script>
+// UTF-8 バイト数（正確）
+function getUtf8Bytes(str) {
+  return new TextEncoder().encode(str).length;
+}
+
+// Shift_JIS バイト数（簡易判定：半角1 / 全角2）
+function getShiftJISBytes(str) {
+  let count = 0;
+  for (const ch of str) {
+    if (ch.match(/[ -~]/)) count += 1; // 半角
+    else count += 2; // 全角
+  }
+  return count;
+}
+
+// EUC-JP バイト数（簡易判定：半角1 / 全角2）
+function getEUCJPBytes(str) {
+  let count = 0;
+  for (const ch of str) {
+    if (ch.match(/[ -~]/)) count += 1;
+    else count += 2;
+  }
+  return count;
+}
+
+// UTF-16 バイト数（正確：1文字=2バイト）
+function getUTF16Bytes(str) {
+  return str.length * 2;
+}
+
+function update() {
+  const text = document.getElementById("textInput").value;
+  const charCount = text.length;
+  const lines = text === "" ? 0 : text.split(/\r\n|\r|\n/).length;
+
+  const utf8 = getUtf8Bytes(text);
+  const sjis = getShiftJISBytes(text);
+  const euc = getEUCJPBytes(text);
+  const utf16 = getUTF16Bytes(text);
+
+  document.getElementById("charCount").textContent = charCount;
+  document.getElementById("lineCount").textContent = lines;
+  document.getElementById("utf8Count").textContent = utf8;
+  document.getElementById("sjisCount").textContent = sjis;
+  document.getElementById("eucCount").textContent = euc;
+  document.getElementById("utf16Count").textContent = utf16;
+
+  const limit = Number(document.getElementById("limitInput").value);
+  const bar = document.getElementById("progressBar");
+
+  if (limit > 0) {
+    const ratio = Math.min(charCount / limit, 2);
+    bar.style.width = Math.min(ratio * 100, 100) + "%";
+    bar.style.background = ratio <= 1 ? "#3b82f6" : "#ef4444";
+
+    let msg = "";
+    if (charCount === 0) msg = "まだ文字が入力されていません。";
+    else if (ratio < 1) msg = `あと ${limit - charCount} 文字まで制限内です。`;
+    else if (ratio === 1) msg = "ちょうど制限文字数です。";
+    else msg = `制限を ${charCount - limit} 文字オーバーしています。`;
+
+    document.getElementById("limitInfo").textContent = msg;
+  }
+
+  // 注意書き（誤差の可能性）
+  const note = [];
+  note.push("【注意事項】");
+  note.push("・UTF-8 と UTF-16 のバイト数は正確に計算しています。");
+  note.push("・Shift_JIS / EUC-JP のバイト数は「半角=1バイト / 全角=2バイト」の簡易計算です。");
+  note.push("　実際の文字コードでは例外があり、完全一致しない場合があります。");
+  note.push("・古いシステムやメールでは Shift_JIS や EUC-JP の制限が使われることがあります。");
+  note.push("・文字コードによってバイト数が変わるため、用途に応じて確認してください。");
+
+  document.getElementById("noteBox").textContent = note.join("\n");
+}
+
+document.getElementById("textInput").addEventListener("input", update);
+document.getElementById("limitInput").addEventListener("input", update);
+
+update();
+</script>
+
+</body>
+</html>
